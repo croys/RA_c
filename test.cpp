@@ -13,28 +13,6 @@
 using namespace rac;
 
 TEST_CASE( "base basics" , "[base]" ) {
-#if 0
-    {
-        bool thrown = false;
-        try {
-            thrower< std::runtime_error >() << "This should throw" << std::ends;
-        } catch (...) {
-            thrown = true;
-        }
-        REQUIRE( thrown == true );
-    }
-
-    {
-        bool thrown = false;
-        try {
-            thrower< std::runtime_error >()
-                << "This shows the disadvantage of this approach";
-        } catch (...) {
-            thrown = true;
-        }
-        REQUIRE( thrown == false );
-    }
-#endif
     {
         bool thrown = false;
         std::string msg;
