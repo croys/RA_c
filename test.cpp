@@ -89,6 +89,9 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
 
     REQUIRE( cs_int.empty() );
 
+    REQUIRE( cs_int.cend() - cs_int.cbegin() == 0 );
+    REQUIRE( cis->cend() - cis->cbegin()  == 0 );
+
     REQUIRE( cs_int.size() == 0 );
     REQUIRE( ucs_int.size() == 0 );
     REQUIRE( is->size() == 0 );
@@ -100,6 +103,9 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     REQUIRE( ucs_int.size() == n );
     REQUIRE( is->size() == n );
     REQUIRE( cis->size() == n );
+    REQUIRE( cs_int.end() - cs_int.cbegin() == cs_int.size() );
+    REQUIRE( cis->cend() - cis->cbegin() == cis->size()  * sizeof(int) );
+
 
     column_storage<int>::iterator it;
     size_t i = 0;

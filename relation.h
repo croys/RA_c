@@ -91,6 +91,13 @@ struct column_storage_base
 
     typedef std::pmr::vector<T> vec_t;
 
+    typedef vec_t::value_type       value_type;
+    typedef vec_t::size_type        size_type;
+    typedef vec_t::const_reference  const_reference;
+    typedef vec_t::reference        reference;
+    typedef vec_t::const_iterator   const_iterator;
+    typedef vec_t::iterator         iterator;
+
     // FIXME: should probably take a shared pointer, no?
     column_storage_base( std::pmr::memory_resource* rsrc )
         : m_rsrc( rsrc ), m_vec( rsrc ) {
@@ -98,25 +105,109 @@ struct column_storage_base
         //m_vec = make_container< std::pmr::vector< T > >( rsrc );
     }
 
+    // immutable deconstruction
+
+    constexpr bool empty() const noexcept
+    {
+        return this->m_vec.empty();
+    }
+
+    constexpr size_type size() const noexcept
+    {
+        return this->m_vec.size();
+    }
+
+    constexpr const_iterator cbegin() const noexcept
+    {
+        return this->m_vec.cbegin();
+    }
+
+    constexpr const_iterator cend() const noexcept
+    {
+        return this->m_vec.cend();
+    }
+
+    constexpr const_reference at( size_type i ) const
+    {
+        return this->m_vec.at( i );
+    }
+
+    constexpr const_reference operator[]( size_type i ) const
+    {
+        return this->m_vec[i];
+    }
+
+    constexpr const T* data() const noexcept
+    {
+        return this->m_vec.data();
+    }
+
+    // mutation
+
+    constexpr iterator begin() noexcept
+    {
+        return this->m_vec.begin();
+    }
+
+    constexpr iterator end() noexcept
+    {
+        return this->m_vec.end();
+    }
+
+    constexpr reference at( size_type i )
+    {
+        return this->m_vec.at( i );
+    }
+
+    constexpr reference operator[]( size_type i )
+    {
+        return this->m_vec[i];
+    }
+
+    constexpr T* data() noexcept
+    {
+        return this->m_vec.data();
+    }
+
+    constexpr void resize( size_type sz )
+    {
+        return this->m_vec.resize( sz );
+    }
+
+protected:
     std::pmr::memory_resource*  m_rsrc;
     vec_t                       m_vec;
 };
 
+
+template<typename T>
+struct column_storage : public column_storage_base< T >
+{
+    column_storage( std::pmr::memory_resource* rsrc )
+        : column_storage_base< T >( rsrc )
+    {
+    }
+};
+
+
 template<typename T>
 struct untyped_column_storage : public IStorage
 {
+    // FIXME: shared_ptr
     untyped_column_storage( column_storage_base< T >* storage ) :
         m_storage( storage )
     {
     }
 
-    // Convenience 
+private:
+
+    // Convenience
     static inline constexpr value* v( T* x ) noexcept
     {
         return reinterpret_cast<value*>(x);
     }
 
-    static inline constexpr const value *cv( const T* x ) noexcept
+    static inline constexpr const value* cv( const T* x ) noexcept
     {
         return reinterpret_cast<const value*>(x);
     }
@@ -131,52 +222,50 @@ struct untyped_column_storage : public IStorage
         return reinterpret_cast<const T*>(x);
     }
 
+public:
 
     // IStorage interface
 
-    // FIXME: probably want to push all of these down to
-    // column_storage_base to allow storage decisions at that
-    // point
-
     const value* at( size_t idx ) const override
     {
-        return cv( &( m_storage->m_vec.at( idx ) ) );
+        return cv( &( m_storage->at( idx ) ) );
     }
 
     size_t size() const noexcept override
     {
-        return m_storage->m_vec.size();
+        return m_storage->size();
     }
 
     const value* cbegin() const noexcept override
     {
-        return cv( m_storage->m_vec.data() );
+        // NOTE: can't reinterpret_cast iterator to T*
+        return cv( m_storage->data() );
     }
 
     const value* cend() const noexcept override
     {
-        return cv( m_storage->m_vec.data() + m_storage->m_vec.size() );
+        // NOTE: can't reinterpret_cast iterator to T*
+        return cv( m_storage->data() + m_storage->size() );
     }
-
 
     value* at( size_t idx ) override
     {
-        return v( &( m_storage->m_vec.at( idx ) ) );
+        return v( &( m_storage->at( idx ) ) );
     }
 
     value* begin() noexcept override
     {
-        return v( m_storage->m_vec.data() );
+        return v( m_storage->data() );
     }
 
-    value* end() noexcept  override
+    value* end() noexcept override
     {
-        return v( m_storage->m_vec.data() + m_storage->m_vec.size() );
+        return v( m_storage->data() + m_storage->size() );
     }
 
     void resize( size_t sz ) override
     {
-        m_storage->m_vec.resize( sz );
+        m_storage->resize( sz );
     }
 
     void copy(   const value *fromb
@@ -215,89 +304,6 @@ struct untyped_column_storage : public IStorage
 
 private:
     column_storage_base< T >* m_storage;
-};
-
-
-template<typename T>
-struct column_storage : public column_storage_base<T>
-{
-    // types
-
-    using typename column_storage_base< T >::vec_t;
-
-    typedef vec_t::value_type       value_type;
-    typedef vec_t::size_type        size_type;
-    typedef vec_t::const_reference  const_reference;
-    typedef vec_t::reference        reference;
-    typedef vec_t::const_iterator   const_iterator;
-    typedef vec_t::iterator         iterator;
-
-    column_storage( std::pmr::memory_resource* rsrc ) :
-        column_storage_base<T>( rsrc )
-    {
-    }
-
-
-    // immutable deconstruction
-
-    constexpr bool empty() const noexcept
-    {
-        return this->m_vec.empty();
-    }
-
-    constexpr size_type size() const noexcept
-    {
-        return this->m_vec.size();
-    }
-
-    constexpr const_iterator cbegin() const noexcept
-    {
-        return this->m_vec.cbegin();
-    }
-
-    constexpr const_iterator cend() const noexcept
-    {
-        return this->m_vec.cend();
-    }
-
-    constexpr const_reference at( size_type i ) const
-    {
-        return this->m_vec.at( i );
-    }
-
-    constexpr const_reference operator[]( size_type i ) const
-    {
-        return this->m_vec[i];
-    }
-
-    // mutation
-
-    constexpr iterator begin() noexcept
-    {
-        return this->m_vec.begin();
-    }
-
-    constexpr iterator end() noexcept
-    {
-        return this->m_vec.end();
-    }
-
-    constexpr reference at( size_type i )
-    {
-        return this->m_vec.at( i );
-    }
-
-    constexpr reference operator[]( size_type i )
-    {
-        return this->m_vec[i];
-    }
-
-    constexpr void resize( size_type sz )
-    {
-        return this->m_vec.resize( sz );
-    }
-
-
 };
 
 
