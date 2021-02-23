@@ -11,7 +11,7 @@
 namespace rac
 {
 
-struct value{};
+struct value_t{};
 
 // We use one monotonic_buffer_resource per column
 // to get good locality without fragmentation
@@ -30,7 +30,7 @@ struct value{};
 // => need pool to use shared pointers
 
 // FIXME: need abstract base class to act as an interface for providing
-// void * access & value operations - copy, move, (emplace?)
+// void * access & value_t operations - copy, move, (emplace?)
 // also want bulk operations
 // Should be abc rather than component as we want to be able to
 // extract the typed version
@@ -44,15 +44,15 @@ struct value{};
 struct IStorage
 {
     // immutable access
-    virtual const value*    at( size_t idx ) const = 0;
+    virtual const value_t*  at( size_t idx ) const = 0;
     virtual size_t          size() const noexcept = 0;
-    virtual const value*    cbegin() const noexcept = 0;
-    virtual const value*    cend() const noexcept = 0;
+    virtual const value_t*  cbegin() const noexcept = 0;
+    virtual const value_t*  cend() const noexcept = 0;
 
     // mutable access
-    virtual value*  at( size_t idx ) = 0;
-    virtual value*  begin() noexcept = 0;
-    virtual value*  end() noexcept = 0;
+    virtual value_t*    at( size_t idx ) = 0;
+    virtual value_t*    begin() noexcept = 0;
+    virtual value_t*    end() noexcept = 0;
 
     // reserve?
 
@@ -65,25 +65,21 @@ struct IStorage
 
 
     // copy
-    virtual void copy(   const value*   fromb
-                        ,const value*   frome
-                        ,value*         to
+    virtual void copy(   const value_t* fromb
+                        ,const value_t* frome
+                        ,value_t*       to
                         ) = 0;
 
     // move
-    virtual void move(   value* fromb
-                        ,value* frome
-                        ,value* to
+    virtual void move(   value_t*   fromb
+                        ,value_t*   frome
+                        ,value_t*   to
                         ) = 0;
 
 
 };
 
 
-// FIXME: separate storage for builder and relation?
-
-// column_storage base class to allows different high level
-// views onto same storage
 template<typename T>
 struct column_storage_base
 {
@@ -102,7 +98,6 @@ struct column_storage_base
     column_storage_base( std::pmr::memory_resource* rsrc )
         : m_rsrc( rsrc ), m_vec( rsrc ) {
         assert( rsrc );
-        //m_vec = make_container< std::pmr::vector< T > >( rsrc );
     }
 
     // immutable deconstruction
@@ -202,22 +197,22 @@ struct untyped_column_storage : public IStorage
 private:
 
     // Convenience
-    static inline constexpr value* v( T* x ) noexcept
+    static inline constexpr value_t* v( T* x ) noexcept
     {
-        return reinterpret_cast<value*>(x);
+        return reinterpret_cast<value_t*>(x);
     }
 
-    static inline constexpr const value* cv( const T* x ) noexcept
+    static inline constexpr const value_t* cv( const T* x ) noexcept
     {
-        return reinterpret_cast<const value*>(x);
+        return reinterpret_cast<const value_t*>(x);
     }
 
-    static inline constexpr T* t( value * x ) noexcept
+    static inline constexpr T* t( value_t * x ) noexcept
     {
         return reinterpret_cast<T*>(x);
     }
 
-    static inline constexpr const T* ct( const value * x ) noexcept
+    static inline constexpr const T* ct( const value_t  * x ) noexcept
     {
         return reinterpret_cast<const T*>(x);
     }
@@ -226,7 +221,7 @@ public:
 
     // IStorage interface
 
-    const value* at( size_t idx ) const override
+    const value_t* at( size_t idx ) const override
     {
         return cv( &( m_storage->at( idx ) ) );
     }
@@ -236,29 +231,29 @@ public:
         return m_storage->size();
     }
 
-    const value* cbegin() const noexcept override
+    const value_t* cbegin() const noexcept override
     {
         // NOTE: can't reinterpret_cast iterator to T*
         return cv( m_storage->data() );
     }
 
-    const value* cend() const noexcept override
+    const value_t* cend() const noexcept override
     {
         // NOTE: can't reinterpret_cast iterator to T*
         return cv( m_storage->data() + m_storage->size() );
     }
 
-    value* at( size_t idx ) override
+    value_t* at( size_t idx ) override
     {
         return v( &( m_storage->at( idx ) ) );
     }
 
-    value* begin() noexcept override
+    value_t* begin() noexcept override
     {
         return v( m_storage->data() );
     }
 
-    value* end() noexcept override
+    value_t* end() noexcept override
     {
         return v( m_storage->data() + m_storage->size() );
     }
@@ -268,9 +263,9 @@ public:
         m_storage->resize( sz );
     }
 
-    void copy(   const value *fromb
-                ,const value *frome
-                ,value       *to
+    void copy(   const value_t* fromb
+                ,const value_t* frome
+                ,value_t*       to
     ) override
     {
         const T* fb = ct( fromb );
@@ -285,9 +280,9 @@ public:
         }
     }
 
-    void move(   value  *fromb
-                ,value  *frome
-                ,value  *to
+    void move(   value_t*   fromb
+                ,value_t*   frome
+                ,value_t*   to
     ) override
     {
         T* fb   = t( fromb );

@@ -114,7 +114,7 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
         *it = i++;
     }
 
-    auto as_cint = []( const value* v )
+    auto as_cint = []( const value_t* v )
     {
         return reinterpret_cast<const int *>(v);
     };
