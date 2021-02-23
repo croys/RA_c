@@ -11,14 +11,6 @@
 namespace rac
 {
 
-template< typename Container, typename... Values>
-auto make_container( auto* resource, Values&&... values) {
-    Container result{resource};
-    result.reserve( sizeof...(values) );
-    (result.emplace_back(std::forward<Values>(values)), ...);
-    return result;
-}
-
 struct value{};
 
 // We use one monotonic_buffer_resource per column
