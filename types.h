@@ -35,8 +35,6 @@ inline bool operator==(const type_t& ta, const type_t& tb)
     return ta.ty_con == tb.ty_con;
 }
 
-// FIXME: why are do we need to explicitly define this?
-// It should be synthesized...
 inline bool operator!=(const type_t& ta, const type_t& tb)
 {
     return ta.ty_con == tb.ty_con;

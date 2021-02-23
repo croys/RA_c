@@ -238,7 +238,17 @@ struct column_storage : public column_storage_base<T>
     }
 
 
-    // access elements
+    // immutable deconstruction
+
+    constexpr bool empty() const noexcept
+    {
+        return this->m_vec.empty();
+    }
+
+    constexpr size_type size() const noexcept
+    {
+        return this->m_vec.size();
+    }
 
     constexpr const_iterator cbegin() const noexcept
     {
@@ -255,10 +265,12 @@ struct column_storage : public column_storage_base<T>
         return this->m_vec.at( i );
     }
 
-    constexpr size_type size() const noexcept
+    constexpr const_reference operator[]( size_type i ) const
     {
-        return this->m_vec.size();
+        return this->m_vec[i];
     }
+
+    // mutation
 
     constexpr iterator begin() noexcept
     {
@@ -270,7 +282,21 @@ struct column_storage : public column_storage_base<T>
         return this->m_vec.end();
     }
 
-    // add element(s)
+    constexpr reference at( size_type i )
+    {
+        return this->m_vec.at( i );
+    }
+
+    constexpr reference operator[]( size_type i )
+    {
+        return this->m_vec[i];
+    }
+
+    constexpr void resize( size_type sz )
+    {
+        return this->m_vec.resize( sz );
+    }
+
 
 };
 

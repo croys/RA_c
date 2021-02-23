@@ -87,10 +87,18 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     IStorage* is = static_cast<IStorage*>( &ucs_int );
     const IStorage* cis = static_cast<const IStorage*>( &ucs_int );
 
+    REQUIRE( cs_int.empty() );
+
+    REQUIRE( cs_int.size() == 0 );
+    REQUIRE( ucs_int.size() == 0 );
+    REQUIRE( is->size() == 0 );
+    REQUIRE( cis->size() == 0 );
+
     const size_t n = 100;
     is->resize( n );
     REQUIRE( cs_int.size() == n );
     REQUIRE( ucs_int.size() == n );
+    REQUIRE( is->size() == n );
     REQUIRE( cis->size() == n );
 
     column_storage<int>::iterator it;
@@ -109,5 +117,49 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     REQUIRE( cs_int.at(99) == 99 );
     REQUIRE( *as_cint( cis->at(0) ) == 0 );
     REQUIRE( *as_cint( cis->at(99) ) == 99 );
+
+
+    column_storage< int > cs_int2( &rsrc );
+    untyped_column_storage< int > ucs_int2( &cs_int2 );
+    IStorage* is2 = static_cast<IStorage*>( &ucs_int2 );
+    const IStorage* cis2 = static_cast<const IStorage*>( &ucs_int2 );
+
+    is2->resize( n );
+
+    REQUIRE( cs_int2.size() == n );
+    REQUIRE( ucs_int2.size() == n );
+    REQUIRE( is2->size() == n );
+    REQUIRE( cis2->size() == n );
+
+    is2->move( is->begin(), is->end(), is2->begin() );
+    REQUIRE( *as_cint( cis2->at( 0 ) ) == 0 );
+    REQUIRE( *as_cint( cis2->at( 99 ) ) == 99 );
+
+    for ( it = cs_int.begin(); it != cs_int.end(); ++it ) {
+        *it = 0;
+    }
+
+    REQUIRE( *as_cint( cis->at( 0 ) ) == 0 );
+    REQUIRE( *as_cint( cis->at( 99 ) ) == 0 );
+
+    is->copy( cis2->cbegin(), cis2->cend(), is->begin() );
+
+    REQUIRE( *as_cint( cis->at( 0 ) ) == 0 );
+    REQUIRE( *as_cint( cis->at( 99 ) ) == 99 );
+
+    for (i = 0; i<n; ++i) {
+        cs_int2.at( i ) = n-i;
+    }
+    REQUIRE( cs_int2.at( 0 ) == n );
+    REQUIRE( cs_int2.at( 99 ) == n - 99 );
+
+    for (i = 0; i<n; ++i) {
+        cs_int2[i] = i;
+    }
+
+    REQUIRE( cs_int2[ 0 ] == 0 );
+    REQUIRE( cs_int2.at( 0 ) == 0 );
+    REQUIRE( cs_int2[ 99 ] == 99 );
+    REQUIRE( cs_int2.at( 99 ) == 99 );
 
 }
