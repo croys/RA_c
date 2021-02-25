@@ -82,8 +82,9 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     std::array< std::uint8_t, 32768 > buffer{};
     std::pmr::monotonic_buffer_resource rsrc( buffer.data(), buffer.size() );
 
-    column_storage< int > cs_int( &rsrc );
-    untyped_column_storage< int > ucs_int( &cs_int );
+    auto cs_int_ = std::make_shared< column_storage< int > >( &rsrc );
+    auto& cs_int = *cs_int_;
+    untyped_column_storage< int > ucs_int( cs_int_ );
     IStorage* is = static_cast<IStorage*>( &ucs_int );
     const IStorage* cis = static_cast<const IStorage*>( &ucs_int );
 
@@ -124,9 +125,9 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     REQUIRE( *as_cint( cis->at(0) ) == 0 );
     REQUIRE( *as_cint( cis->at(99) ) == 99 );
 
-
-    column_storage< int > cs_int2( &rsrc );
-    untyped_column_storage< int > ucs_int2( &cs_int2 );
+    auto cs_int2_ = std::make_shared< column_storage< int > >( &rsrc );
+    auto& cs_int2 = *cs_int2_;
+    untyped_column_storage< int > ucs_int2( cs_int2_ );
     IStorage* is2 = static_cast<IStorage*>( &ucs_int2 );
     const IStorage* cis2 = static_cast<const IStorage*>( &ucs_int2 );
 
@@ -168,4 +169,30 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     REQUIRE( cs_int2[ 99 ] == 99 );
     REQUIRE( cs_int2.at( 99 ) == 99 );
 
+}
+
+
+TEST_CASE( "relation_builder basics", "[relation_builder]") {
+    std::array< std::uint8_t, 32768 > buffer{};
+    std::pmr::monotonic_buffer_resource rsrc( buffer.data(), buffer.size() );
+
+    std::vector<std::string> col_names { "A", "B", "C" };
+    relation_builder<int, float, double> builder( &rsrc, col_names.begin(), col_names.end() );
+
+    rel_ty_t expected { { "A", { Int } }, { "B" , { Float } }, { "C", { Double } } };
+    REQUIRE( builder.type() == expected );
+
+    int a = 1;
+    float b = 3.14;
+    double c = 2.718281828459045;
+
+    builder.push_back( a, b, c );
+
+    REQUIRE( builder.size() == 1 );
+    REQUIRE( builder.at( 0 ) == std::tuple<int, float, double>( a, b, c ) );
+
+    builder.push_back( 2 * a, 2.0f * b, 2.0 * c );
+
+    REQUIRE( builder.size() == 2 );
+    REQUIRE( builder.at( 1 ) == std::tuple<int, float, double>( 2 * a, 2.0f * b, 2.0 * c ) );
 }
