@@ -29,23 +29,15 @@ struct type_t
     ty_con_t ty_con;
 
 };
-
-inline bool operator==(const type_t& ta, const type_t& tb)
+constexpr bool operator==(const type_t& ta, const type_t& tb)
 {
     return ta.ty_con == tb.ty_con;
 }
 
-inline bool operator!=(const type_t& ta, const type_t& tb)
+constexpr auto operator<=>(const type_t& ta, const type_t& tb)
 {
-    return ta.ty_con == tb.ty_con;
+    return ta.ty_con <=> tb.ty_con;
 }
-
-
-inline bool operator<(const type_t& ta, const type_t& tb)
-{
-    return ta.ty_con < tb.ty_con;
-}
-
 
 
 // FIXME: traits of C++ types

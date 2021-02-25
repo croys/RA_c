@@ -214,22 +214,22 @@ struct untyped_column_storage : public IStorage
 private:
 
     // Convenience
-    static inline constexpr value_t* v( T* x ) noexcept
+    static constexpr value_t* v( T* x ) noexcept
     {
         return reinterpret_cast<value_t*>(x);
     }
 
-    static inline constexpr const value_t* cv( const T* x ) noexcept
+    static constexpr const value_t* cv( const T* x ) noexcept
     {
         return reinterpret_cast<const value_t*>(x);
     }
 
-    static inline constexpr T* t( value_t * x ) noexcept
+    static constexpr T* t( value_t * x ) noexcept
     {
         return reinterpret_cast<T*>(x);
     }
 
-    static inline constexpr const T* ct( const value_t  * x ) noexcept
+    static constexpr const T* ct( const value_t  * x ) noexcept
     {
         return reinterpret_cast<const T*>(x);
     }
@@ -633,6 +633,12 @@ public:
     std::vector<resource_ptr_t>         m_resources;
     std::vector<IValue::storage_ptr_t>  m_cols;
 
+    // FIXME: move this over to being fully statically typed
+    // use a tuple of shared_ptr to each column_storage class
+    // can then construct IValue for each and pass off to relation
+    // if we just add a typed_storage() method to untyped_column_storage,
+    // then we can just keep untype_column_storage instances, and
+    // use these to build the relation...
 };
 
 // build up column or row-wise
@@ -651,6 +657,17 @@ relation_t create(
     throw not_implemented();
 }
 #endif
+
+
+
+// relations themselves
+// want iteration over rows and std::get<> to allow
+// interop with std contaiers
+
+// tableviews
+
+
+// relation operations
 
 
 }
