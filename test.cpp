@@ -104,8 +104,8 @@ TEST_CASE( "column_storage basics", "[column_storage] [untyped_column_storage]")
     REQUIRE( ucs_int.size() == n );
     REQUIRE( is->size() == n );
     REQUIRE( cis->size() == n );
-    REQUIRE( cs_int.end() - cs_int.cbegin() == cs_int.size() );
-    REQUIRE( cis->cend() - cis->cbegin() == cis->size()  * sizeof(int) );
+    REQUIRE( cs_int.cend() - cs_int.cbegin() == cs_int.size() );
+    REQUIRE( cis->cend() - cis->cbegin() == cis->size() );
 
 
     column_storage<int>::iterator it;
@@ -188,6 +188,8 @@ TEST_CASE( "relation_builder basics", "[relation_builder]") {
 
     builder.push_back( a, b, c );
 
+    builder.dump( std::cout );
+
     REQUIRE( builder.size() == 1 );
     REQUIRE( builder.at( 0 ) == std::tuple<int, float, double>( a, b, c ) );
 
@@ -195,4 +197,6 @@ TEST_CASE( "relation_builder basics", "[relation_builder]") {
 
     REQUIRE( builder.size() == 2 );
     REQUIRE( builder.at( 1 ) == std::tuple<int, float, double>( 2 * a, 2.0f * b, 2.0 * c ) );
+
+    builder.dump( std::cout );
 }

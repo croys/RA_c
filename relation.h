@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <execution>
 #include <memory>
+#include <ostream>
+#include <sstream>
 
 #include "base.h"
 #include "types.h"
@@ -14,6 +16,212 @@ namespace rac
 
 struct value_t{};
 
+
+// Note: we implement as much of the stdlib iteratos as makes sense
+// As we are abstracting over variable sized storage of unknown type
+// we cannot provide anything where the type leaks
+// - no dereferencing, so std::copy and std::move cannot work with
+// these iterators
+struct const_value_iterator
+{
+    //typedef const value_t*  value_type;
+    typedef int64_t         difference_type;
+    //typedef const value_t*  reference_type;
+
+    const_value_iterator( const value_t* ptr, size_t size )
+        : m_ptr( ptr ), m_size( size )
+    {}
+
+
+    // Iterator
+
+    // operator* purposefully left out
+    const_value_iterator& operator++() noexcept
+    {
+        m_ptr += m_size;
+        return *this;
+    }
+
+    // ForwardIterator
+    const_value_iterator operator++(int) noexcept // post increment
+    {
+        return const_value_iterator( m_ptr + m_size, m_size );
+    }
+
+    // BidirectionalIterator
+
+    const_value_iterator& operator--() noexcept
+    {
+        m_ptr -= m_size;
+        return *this;
+    }
+
+    const_value_iterator operator--(int) noexcept // post-decrement
+    {
+        return const_value_iterator( m_ptr - m_size, m_size );
+    }
+
+    // RandomAccessIterator
+#if 0
+    constexpr reference_type operator[](size_t idx) noexcept
+    {
+        return m_ptr + ( idx * m_size );
+    }
+#endif
+
+    constexpr const_value_iterator& operator+=(size_t n) noexcept
+    {
+        m_ptr += n * m_size;
+        return *this;
+    }
+
+    constexpr const_value_iterator& operator-=(size_t n) noexcept
+    {
+        m_ptr -= n * m_size;
+        return *this;
+    }
+
+    const value_t* get() const noexcept
+    {
+        return m_ptr;
+    }
+
+    const value_t*  m_ptr;
+    size_t          m_size;
+};
+
+
+const_value_iterator operator+(
+     const const_value_iterator&            it
+    ,const_value_iterator::difference_type  d
+) noexcept {
+    return const_value_iterator( it.m_ptr + d * it.m_size, it.m_size );
+}
+
+const_value_iterator operator+(
+     const_value_iterator::difference_type  d
+    ,const const_value_iterator&            it
+) noexcept {
+    return const_value_iterator( it.m_ptr + d * it.m_size, it.m_size );
+}
+
+const_value_iterator::difference_type operator-(
+     const const_value_iterator& a
+    ,const const_value_iterator& b
+) noexcept {
+    return ( a.m_ptr - b.m_ptr ) / a.m_size;
+}
+
+
+constexpr bool operator==(const const_value_iterator& a, const const_value_iterator& b)
+{
+    return a.m_ptr == b.m_ptr;
+}
+
+constexpr auto operator<=>(const const_value_iterator& a, const const_value_iterator& b)
+{
+    return a.m_ptr <=> b.m_ptr;
+}
+
+
+
+struct value_iterator
+{
+    typedef int64_t         difference_type;
+
+    value_iterator( value_t* ptr, size_t size )
+        : m_ptr( ptr ), m_size( size )
+    {}
+
+    // Iterator
+
+    // operator* purposefully left out
+    value_iterator& operator++() noexcept
+    {
+        m_ptr += m_size;
+        return *this;
+    }
+
+    // ForwardIterator
+    value_iterator operator++(int) noexcept // post increment
+    {
+        return value_iterator( m_ptr + m_size, m_size );
+    }
+
+    // BidirectionalIterator
+
+    value_iterator& operator--() noexcept
+    {
+        m_ptr -= m_size;
+        return *this;
+    }
+
+    value_iterator operator--(int) noexcept // post-decrement
+    {
+        return value_iterator( m_ptr - m_size, m_size );
+    }
+
+    // RandomAccessIterator
+
+    // operator[] purposefully left out
+
+    constexpr value_iterator& operator+=( size_t n ) noexcept
+    {
+        m_ptr += n * m_size;
+        return *this;
+    }
+
+    constexpr value_iterator& operator-=( size_t n ) noexcept
+    {
+        m_ptr -= n * m_size;
+        return *this;
+    }
+
+    value_t* get() const noexcept
+    {
+        return m_ptr;
+    }
+
+    value_t*    m_ptr;
+    size_t      m_size;
+};
+
+
+value_iterator operator+(
+     const value_iterator&              it
+    ,value_iterator::difference_type    d
+) noexcept {
+    return value_iterator( it.m_ptr + d * it.m_size, it.m_size );
+}
+
+value_iterator operator+(
+     value_iterator::difference_type    d
+    ,const value_iterator&              it
+) noexcept {
+    return value_iterator( it.m_ptr + d * it.m_size, it.m_size );
+}
+
+value_iterator::difference_type operator-(
+     const value_iterator& a
+    ,const value_iterator& b
+) noexcept {
+    return ( a.m_ptr - b.m_ptr ) / a.m_size;
+}
+
+
+constexpr bool operator==(const value_iterator& a, const value_iterator& b)
+{
+    return a.m_ptr == b.m_ptr;
+}
+
+constexpr auto operator<=>(const value_iterator& a, const value_iterator& b)
+{
+    return a.m_ptr <=> b.m_ptr;
+}
+
+
+
+
 // untyped access to aligned, contiguous storage of monotyped values
 //
 // tempting to split out interfaces into pure and mutable, but all
@@ -21,16 +229,19 @@ struct value_t{};
 // with const methods and use IStorage/const IStorage as appropriate
 struct IStorage
 {
+    typedef const_value_iterator    const_iterator;
+    typedef value_iterator          iterator;
+
     // immutable access
     virtual const value_t*  at( size_t idx ) const = 0;
     virtual size_t          size() const noexcept = 0;
-    virtual const value_t*  cbegin() const noexcept = 0;
-    virtual const value_t*  cend() const noexcept = 0;
+    virtual const_iterator  cbegin() const noexcept = 0;
+    virtual const_iterator  cend() const noexcept = 0;
 
     // mutable access
-    virtual value_t*    at( size_t idx ) = 0;
-    virtual value_t*    begin() noexcept = 0;
-    virtual value_t*    end() noexcept = 0;
+    virtual value_t*        at( size_t idx ) = 0;
+    virtual iterator        begin() noexcept = 0;
+    virtual iterator        end() noexcept = 0;
 
     // reserve
     virtual void reserve( size_t sz ) = 0;
@@ -45,15 +256,15 @@ struct IStorage
 
 
     // copy
-    virtual void copy(   const value_t* fromb
-                        ,const value_t* frome
-                        ,value_t*       to
+    virtual void copy(   const const_iterator&  fromb
+                        ,const const_iterator&  frome
+                        ,iterator               to
                         ) = 0;
 
     // move
-    virtual void move(   value_t*   fromb
-                        ,value_t*   frome
-                        ,value_t*   to
+    virtual void move(   iterator  fromb
+                        ,iterator  frome
+                        ,iterator  to
                         ) = 0;
 
 
@@ -248,16 +459,14 @@ public:
         return m_storage->size();
     }
 
-    const value_t* cbegin() const noexcept override
+    const_iterator cbegin() const noexcept override
     {
-        // NOTE: can't reinterpret_cast iterator to T*
-        return cv( m_storage->data() );
+        return const_value_iterator( cv( m_storage->data() ), sizeof( T ) ); // FIXME: sizeof?
     }
 
-    const value_t* cend() const noexcept override
+    const_iterator cend() const noexcept override
     {
-        // NOTE: can't reinterpret_cast iterator to T*
-        return cv( m_storage->data() + m_storage->size() );
+        return const_value_iterator( cv( m_storage->data() + m_storage->size() ), sizeof( T ) ); // FIXME: sizeof?
     }
 
     value_t* at( size_t idx ) override
@@ -265,14 +474,15 @@ public:
         return v( &( m_storage->at( idx ) ) );
     }
 
-    value_t* begin() noexcept override
+
+    iterator begin() noexcept override
     {
-        return v( m_storage->data() );
+        return value_iterator( v( m_storage->data() ), sizeof( T ) ); // FIXME: sizeof?
     }
 
-    value_t* end() noexcept override
+    iterator end() noexcept override
     {
-        return v( m_storage->data() + m_storage->size() );
+        return value_iterator( v( m_storage->data() + m_storage->size() ), sizeof( T ) ); // FIXME: sizeof
     }
 
     void reserve( size_t sz ) override
@@ -291,14 +501,14 @@ public:
         m_storage->push_back( *v_ );
     }
 
-    void copy(   const value_t* fromb
-                ,const value_t* frome
-                ,value_t*       to
+    void copy(   const const_iterator&  fromb
+                ,const const_iterator&  frome
+                ,iterator               to
     ) override
     {
-        const T* fb = ct( fromb );
-        const T* fe = ct( frome );
-        T* to_      = t( to );
+        const T* fb = ct( fromb.get() );
+        const T* fe = ct( frome.get() );
+        T* to_      = t( to.get() );
         // abstract out execution policy?
         // select based on size?
         if (false) {
@@ -308,14 +518,14 @@ public:
         }
     }
 
-    void move(   value_t*   fromb
-                ,value_t*   frome
-                ,value_t*   to
+    void move(   iterator   fromb
+                ,iterator   frome
+                ,iterator   to
     ) override
     {
-        T* fb   = t( fromb );
-        T* fe   = t( frome );
-        T* to_  = t( to );
+        T* fb   = t( fromb.get() );
+        T* fe   = t( frome.get() );
+        T* to_  = t( to.get() );
 
         if (false) {
             std::move( std::execution::par_unseq, fb, fe, to_ );
@@ -519,7 +729,7 @@ private:
 public:
     // FIXME: we probably should take ownership of the resource
     template<typename Iter>
-    explicit relation_builder(std::pmr::memory_resource* rsrc, Iter nb, Iter ne)
+    explicit relation_builder( std::pmr::memory_resource* rsrc, Iter nb, Iter ne )
     {
         collect_ops<Types...>(m_ops);
 
@@ -592,39 +802,166 @@ public:
 
 
 private:
+
+    template<size_t n, typename T, typename... Ts>
+    struct col_type
+    {
+        typedef col_type<n-1, Ts...>::type type;
+    };
+
     template<typename T, typename... Ts>
-    struct at_helper
+    struct col_type<0, T, Ts...>
+    {
+        typedef T type;
+    };
+
+
+    // FIXME: clean this stuff up
+    // - can re-use for relation_builder, relation and table_view
+
+    template<size_t n, size_t m, typename T, typename... Ts>
+    struct col_extractor
+    {
+        static constexpr std::vector<std::string> to_strings(
+                const std::vector<IValue::storage_ptr_t>& cols
+        )
+        {
+            return col_extractor< n-1, m, Ts...>::to_strings( cols );
+        }
+    };
+
+    template<size_t m, typename T, typename... Ts>
+    struct col_extractor<0, m, T, Ts...>
+    {
+        // FIXME: pmr-ify
+        static constexpr std::vector<std::string> to_strings(
+                const std::vector<IValue::storage_ptr_t>& cols
+        )
+        {
+            std::vector<std::string> res;
+            std::ostringstream ss;
+            for (auto it = cols[m]->cbegin(); it != cols[m]->cend(); ++it )
+            {
+                ss.seekp( 0 );
+                ss << *reinterpret_cast<const T*>(it.get());
+                res.emplace_back( ss.str() );
+            }
+            return res;
+        }
+    };
+
+    // FIXME: this is a row accessor, as opposed to above column accessors
+    template<typename T, typename... Ts>
+    struct col_helper
     {
         static constexpr std::tuple<T, Ts...> _at(
              const std::vector<IValue::storage_ptr_t>&  cols
             ,size_t                                     col
-            ,size_t                                     idx
+            ,size_t                                     row
         )
         {
             return std::tuple_cat(
-                std::tuple<T>( *(reinterpret_cast<const T*>( cols[col]->at(idx) ) ) ),
-                at_helper<Ts...>::_at( cols, col+1, idx )
+                std::tuple<T>( *(reinterpret_cast<const T*>( cols[ col ]->at( row ) ) ) ),
+                col_helper<Ts...>::_at( cols, col + 1, row )
             );
         }
+
+        // FIXME: pmr-ify
+        static void to_strings(
+             const std::vector<IValue::storage_ptr_t>&  cols
+            ,size_t                                     col_idx
+            ,std::vector< std::vector< std::string > >& res
+        )
+        {
+            // Note: could put following in helper class, or IUnknown itself
+            std::vector< std::string > v;
+            std::ostringstream ss;
+            for ( size_t i = 0; i <  cols[ col_idx ]->size(); ++i )
+            {
+                ss.seekp( 0 );
+                ss << *reinterpret_cast<const T*>( cols[ col_idx ]->at( i ) );
+                v.emplace_back( ss.str() );
+            }
+            res.push_back( v );
+            col_helper<Ts...>::to_strings( cols, col_idx + 1, res );
+        }
+
+        // FIXME: to_ostream
     };
 
     template<typename T>
-    struct at_helper<T>
+    struct col_helper<T>
     {
         static constexpr std::tuple<T> _at(
              const std::vector<IValue::storage_ptr_t>&  cols
             ,size_t                                     col
-            ,size_t                                     idx
+            ,size_t                                     row
         )
         {
-            return std::tuple<T>( *(reinterpret_cast<const T*>( cols[col]->at(idx) ) ) );
+            return std::tuple<T>( *(reinterpret_cast<const T*>( cols[ col ]->at( row ) ) ) );
+        }
+
+        static void to_strings(
+             const std::vector<IValue::storage_ptr_t>&  cols
+            ,size_t                                     col_idx
+            ,std::vector< std::vector< std::string > >& res
+        )
+        {
+            std::vector< std::string > v;
+            std::ostringstream ss;
+            for ( size_t i = 0; i <  cols[ col_idx ]->size(); ++i )
+            {
+                ss.seekp( 0 );
+                ss << *reinterpret_cast<const T*>( cols[ col_idx ]->at( i ) );
+                v.emplace_back( ss.str() );
+            }
+            res.push_back( v );
         }
     };
 
 public:
     constexpr std::tuple<Types...> at( size_t idx ) const
     {
-        return at_helper<Types...>::_at( m_cols, 0, idx );
+        return col_helper<Types...>::_at( m_cols, 0, idx );
+    }
+
+    void dump( std::ostream& os ) const
+    {
+        // dump type
+        os << "relation_builder { ";
+        for ( auto it = m_rel_ty.cbegin(); it != m_rel_ty.cend(); ++it ) {
+            if ( it != m_rel_ty.cbegin() ) {
+                os << ", ";
+            }
+            os << std::get<0>(*it) << " : " << ty_to_string( std::get<1>(*it) );
+
+        }
+        os << " }\n\n";
+
+        // dump values
+
+        std::vector< std::vector< std::string > > vs;
+
+        //for (size_t i=0; i < m_cols.size(); ++i )
+        for (size_t i=0; i < 1; ++i )
+        {
+            col_helper<Types...>::to_strings( m_cols, i, vs );
+        }
+
+        // FIXME: get max sizes fopr each colum
+
+        const size_t n_cols = m_cols.size();
+        const size_t n_rows = m_cols[ 0 ]->size();
+        for ( size_t r = 0; r < n_rows; ++r )
+        {
+            for (size_t c = 0; c < n_cols; ++c )
+            {
+                if ( c > 0 )
+                    os << " ";
+                os << vs[ c ][ r ];
+            }
+            os << "\n";
+        }
     }
 
     rel_ty_t                            m_rel_ty;
@@ -665,6 +1002,11 @@ relation_t create(
 // interop with std contaiers
 
 // tableviews
+// - distinguish table and relation types?
+// - table colums have ordering
+//  - useful for display, typed construction and deconstruction.
+// - relation columns are unordered
+// - do keys belong in relation type, or just to relations?
 
 
 // relation operations
