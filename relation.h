@@ -267,7 +267,6 @@ struct IStorage
                         ,iterator  to
                         ) = 0;
 
-
 };
 
 // We use one monotonic_buffer_resource per column
@@ -610,7 +609,9 @@ struct IValue
 {
     virtual constexpr type_t type() const noexcept = 0;
 
-    // really belongs in IColumn...
+    virtual std::ostream& to_stream( const value_t* v, std::ostream& os ) const = 0;
+
+    // really belongs in IColumn/IColumnBuilder/etc...
     typedef std::shared_ptr<IStorage> storage_ptr_t;
 
     virtual constexpr storage_ptr_t make_storage(
@@ -627,6 +628,28 @@ struct untyped_value_ops : public IValue
 private:
     typedef value_ops<T> val_t;
 
+    // Convenience
+    static constexpr value_t* v( T* x ) noexcept
+    {
+        return reinterpret_cast<value_t*>(x);
+    }
+
+    static constexpr const value_t* cv( const T* x ) noexcept
+    {
+        return reinterpret_cast<const value_t*>(x);
+    }
+
+    static constexpr T* t( value_t * x ) noexcept
+    {
+        return reinterpret_cast<T*>(x);
+    }
+
+    static constexpr const T* ct( const value_t  * x ) noexcept
+    {
+        return reinterpret_cast<const T*>(x);
+    }
+
+
 public:
     // IValue
     using typename IValue::storage_ptr_t;
@@ -634,6 +657,12 @@ public:
     constexpr type_t type() const noexcept override
     {
         return val_t::type();
+    }
+
+    //
+    std::ostream& to_stream( const value_t* v, std::ostream& os ) const override
+    {
+        return os << *ct( v );
     }
 
     constexpr storage_ptr_t make_storage(
@@ -866,11 +895,10 @@ private:
             );
         }
 
-        // FIXME: pmr-ify
         static void to_strings(
-             const std::vector<IValue::storage_ptr_t>&  cols
-            ,size_t                                     col_idx
-            ,std::vector< std::vector< std::string > >& res
+             const std::vector<IValue::storage_ptr_t>&          cols
+            ,size_t                                             col_idx
+            ,std::vector< std::vector< std::string > >&         res
         )
         {
             // Note: could put following in helper class, or IUnknown itself
@@ -882,7 +910,7 @@ private:
                 ss << *reinterpret_cast<const T*>( cols[ col_idx ]->at( i ) );
                 v.emplace_back( ss.str() );
             }
-            res.push_back( v );
+            std::swap( res.emplace_back(), v );
             col_helper<Ts...>::to_strings( cols, col_idx + 1, res );
         }
 
@@ -902,9 +930,9 @@ private:
         }
 
         static void to_strings(
-             const std::vector<IValue::storage_ptr_t>&  cols
-            ,size_t                                     col_idx
-            ,std::vector< std::vector< std::string > >& res
+             const std::vector<IValue::storage_ptr_t>&      cols
+            ,size_t                                         col_idx
+            ,std::vector< std::vector< std::string > >&     res
         )
         {
             std::vector< std::string > v;
@@ -915,7 +943,7 @@ private:
                 ss << *reinterpret_cast<const T*>( cols[ col_idx ]->at( i ) );
                 v.emplace_back( ss.str() );
             }
-            res.push_back( v );
+            std::swap( res.emplace_back(), v );
         }
     };
 
@@ -940,25 +968,62 @@ public:
 
         // dump values
 
-        std::vector< std::vector< std::string > > vs;
-
-        //for (size_t i=0; i < m_cols.size(); ++i )
-        for (size_t i=0; i < 1; ++i )
-        {
-            col_helper<Types...>::to_strings( m_cols, i, vs );
-        }
-
-        // FIXME: get max sizes fopr each colum
-
         const size_t n_cols = m_cols.size();
         const size_t n_rows = m_cols[ 0 ]->size();
+
+        // Work out column widths
+        std::vector<size_t> col_sizes( n_cols );
+        for ( size_t c = 0; c < n_cols; ++c )
+        {
+            col_sizes[ c ] = m_rel_ty[ c ].first.size();
+        }
+
+        std::ostringstream ss;
+        size_t total_width = 0;
+        for ( size_t c = 0; c < n_cols; ++c )
+        {
+            size_t m = col_sizes[ c ];
+            for (auto it = m_cols[ c ]->cbegin(); it != m_cols[ c ]->cend(); ++it )
+            {
+                ss.str("");
+                m_ops[ c ]->to_stream( it.get(), ss );
+                m = std::max( size_t( ss.tellp() ), m );
+            }
+            col_sizes[ c ] = m;
+
+            if (c > 0) {
+                os << "  ";
+                total_width += 2;
+            }
+            ss.str("");
+            ss.width( m );
+            ss << m_rel_ty[ c ].first;
+            ss.width( 0 );
+            os << ss.str();
+            total_width += m;
+        }
+        os << "\n";
+
+        for ( size_t i=0; i < total_width; ++i )
+        {
+            os << "-";
+        }
+        os << "\n";
+
+        // values
+
         for ( size_t r = 0; r < n_rows; ++r )
         {
-            for (size_t c = 0; c < n_cols; ++c )
+            for( size_t c = 0; c < n_cols; ++c )
             {
-                if ( c > 0 )
-                    os << " ";
-                os << vs[ c ][ r ];
+                if (c > 0) {
+                    os << "  ";
+                }
+                ss.str("");
+                ss.width( col_sizes[ c ] );
+                m_ops[ c ]->to_stream( m_cols[ c ]->at( r ), ss );
+                ss.width(0);
+                os << ss.str();
             }
             os << "\n";
         }

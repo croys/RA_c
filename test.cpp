@@ -198,5 +198,7 @@ TEST_CASE( "relation_builder basics", "[relation_builder]") {
     REQUIRE( builder.size() == 2 );
     REQUIRE( builder.at( 1 ) == std::tuple<int, float, double>( 2 * a, 2.0f * b, 2.0 * c ) );
 
+    builder.push_back( 200, 4.5, 2.3 );
+
     builder.dump( std::cout );
 }
