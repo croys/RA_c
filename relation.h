@@ -683,55 +683,8 @@ public:
 
 };
 
-
-template<typename T, typename... Ts>
-struct tys_folds
-{
-    static void collect_tys( std::vector<type_t>& tys )
-    {
-        tys.push_back( value_ops<T>::type() );
-        tys_folds<Ts...>::collect_tys(tys);
-    }
-
-    static void collect_ops( std::vector<IValue*>& ops )
-    {
-        ops.push_back( untyped_value_ops<T>::ops() );
-        tys_folds<Ts...>::collect_ops(ops);
-    }
-
-};
-
-template<typename T>
-struct tys_folds<T>
-{
-    static void collect_tys( std::vector<type_t>& tys )
-    {
-        tys.push_back( value_ops<T>::type() );
-    }
-
-    static void collect_ops( std::vector<IValue*>& ops )
-    {
-        ops.push_back( untyped_value_ops<T>::ops() );
-    }
-};
-
-
-template<typename... Ts>
-void collect_tys( std::vector< type_t >& tys )
-{
-    tys_folds<Ts...>::collect_tys( tys );
-}
-
-
-template<typename... Ts>
-void collect_ops( std::vector<IValue*>& ops )
-{
-    tys_folds<Ts...>::collect_ops( ops );
-}
-
-
-
-struct relation_storage_t
+// FIXME:
+struct column_storage_t
 {
     rel_ty_t m_ty;
 
@@ -739,6 +692,56 @@ struct relation_storage_t
 
     std::vector<storage_ptr_t> m_cols;
 };
+
+// Typed operations over multiple columns
+// FIXME: these are just folds
+template<typename T, typename... Ts>
+struct col_helper
+{
+    static void collect_ops( std::vector<IValue*>& ops )
+    {
+        ops.push_back( untyped_value_ops<T>::ops() );
+        col_helper<Ts...>::collect_ops(ops);
+    }
+
+    static constexpr std::tuple<T, Ts...> row(
+         const std::vector<IValue::storage_ptr_t>&  cols
+        ,size_t                                     col
+        ,size_t                                     row
+    )
+    {
+        return std::tuple_cat(
+            std::tuple<T>( *(reinterpret_cast<const T*>( cols[ col ]->at( row ) ) ) ),
+            col_helper<Ts...>::row( cols, col + 1, row )
+        );
+    }
+};
+
+
+template<typename T>
+struct col_helper<T>
+{
+    static void collect_ops( std::vector<IValue*>& ops )
+    {
+        ops.push_back( untyped_value_ops<T>::ops() );
+    }
+
+    static constexpr std::tuple<T> row(
+         const std::vector<IValue::storage_ptr_t>&  cols
+        ,size_t                                     col
+        ,size_t                                     row
+    )
+    {
+        return std::tuple<T>( *(reinterpret_cast<const T*>( cols[ col ]->at( row ) ) ) );
+    }
+};
+
+template<typename... Ts>
+void collect_ops( std::vector<IValue*>& ops )
+{
+    col_helper<Ts...>::collect_ops( ops );
+}
+
 
 
 // relation builder
@@ -781,7 +784,7 @@ public:
             //resource_ptr_t r = std::make_shared<std::pmr::monotonic_buffer_resource>( rsrc );
             resource_ptr_t r = std::make_shared<std::pmr::unsynchronized_pool_resource>( rsrc );
             m_resources.push_back( r );
-            m_cols.push_back( (*oi)->make_storage( r.get() ) );
+            m_cols.emplace_back( (*oi)->make_storage( r.get() ) );
         }
     }
 
@@ -830,127 +833,10 @@ public:
     // FIXME: emplace_back
 
 
-private:
-
-    template<size_t n, typename T, typename... Ts>
-    struct col_type
-    {
-        typedef col_type<n-1, Ts...>::type type;
-    };
-
-    template<typename T, typename... Ts>
-    struct col_type<0, T, Ts...>
-    {
-        typedef T type;
-    };
-
-
-    // FIXME: clean this stuff up
-    // - can re-use for relation_builder, relation and table_view
-
-    template<size_t n, size_t m, typename T, typename... Ts>
-    struct col_extractor
-    {
-        static constexpr std::vector<std::string> to_strings(
-                const std::vector<IValue::storage_ptr_t>& cols
-        )
-        {
-            return col_extractor< n-1, m, Ts...>::to_strings( cols );
-        }
-    };
-
-    template<size_t m, typename T, typename... Ts>
-    struct col_extractor<0, m, T, Ts...>
-    {
-        // FIXME: pmr-ify
-        static constexpr std::vector<std::string> to_strings(
-                const std::vector<IValue::storage_ptr_t>& cols
-        )
-        {
-            std::vector<std::string> res;
-            std::ostringstream ss;
-            for (auto it = cols[m]->cbegin(); it != cols[m]->cend(); ++it )
-            {
-                ss.seekp( 0 );
-                ss << *reinterpret_cast<const T*>(it.get());
-                res.emplace_back( ss.str() );
-            }
-            return res;
-        }
-    };
-
-    // FIXME: this is a row accessor, as opposed to above column accessors
-    template<typename T, typename... Ts>
-    struct col_helper
-    {
-        static constexpr std::tuple<T, Ts...> _at(
-             const std::vector<IValue::storage_ptr_t>&  cols
-            ,size_t                                     col
-            ,size_t                                     row
-        )
-        {
-            return std::tuple_cat(
-                std::tuple<T>( *(reinterpret_cast<const T*>( cols[ col ]->at( row ) ) ) ),
-                col_helper<Ts...>::_at( cols, col + 1, row )
-            );
-        }
-
-        static void to_strings(
-             const std::vector<IValue::storage_ptr_t>&          cols
-            ,size_t                                             col_idx
-            ,std::vector< std::vector< std::string > >&         res
-        )
-        {
-            // Note: could put following in helper class, or IUnknown itself
-            std::vector< std::string > v;
-            std::ostringstream ss;
-            for ( size_t i = 0; i <  cols[ col_idx ]->size(); ++i )
-            {
-                ss.seekp( 0 );
-                ss << *reinterpret_cast<const T*>( cols[ col_idx ]->at( i ) );
-                v.emplace_back( ss.str() );
-            }
-            std::swap( res.emplace_back(), v );
-            col_helper<Ts...>::to_strings( cols, col_idx + 1, res );
-        }
-
-        // FIXME: to_ostream
-    };
-
-    template<typename T>
-    struct col_helper<T>
-    {
-        static constexpr std::tuple<T> _at(
-             const std::vector<IValue::storage_ptr_t>&  cols
-            ,size_t                                     col
-            ,size_t                                     row
-        )
-        {
-            return std::tuple<T>( *(reinterpret_cast<const T*>( cols[ col ]->at( row ) ) ) );
-        }
-
-        static void to_strings(
-             const std::vector<IValue::storage_ptr_t>&      cols
-            ,size_t                                         col_idx
-            ,std::vector< std::vector< std::string > >&     res
-        )
-        {
-            std::vector< std::string > v;
-            std::ostringstream ss;
-            for ( size_t i = 0; i <  cols[ col_idx ]->size(); ++i )
-            {
-                ss.seekp( 0 );
-                ss << *reinterpret_cast<const T*>( cols[ col_idx ]->at( i ) );
-                v.emplace_back( ss.str() );
-            }
-            std::swap( res.emplace_back(), v );
-        }
-    };
-
 public:
     constexpr std::tuple<Types...> at( size_t idx ) const
     {
-        return col_helper<Types...>::_at( m_cols, 0, idx );
+        return col_helper<Types...>::row( m_cols, 0, idx );
     }
 
     void dump( std::ostream& os ) const
