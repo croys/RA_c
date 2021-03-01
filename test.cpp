@@ -27,6 +27,7 @@ TEST_CASE( "base basics" , "[base]" ) {
         REQUIRE( thrown == true );
         REQUIRE( msg == "Test" );
     }
+    CHECK_THROWS_WITH( throw_with< std::runtime_error >( std::ostringstream() << "Test" ), "Test" );
 
     {
         bool thrown = false;
@@ -62,8 +63,8 @@ TEST_CASE( "type_t basics", "[type_t]" ) {
     REQUIRE( res == expected );
 }
 
-TEST_CASE( "rel_ty_t basics", "[rel_ty_t]") {
-    std::vector< std::pair< std::string, type_t > > col_tys( {
+TEST_CASE( "col_tys_t basics", "[col_tys_t]") {
+    col_tys_t col_tys( {
          { "A", { Void } }, { "B", { Bool } }, { "C", { Int } }
         ,{ "D", { Float } }, { "E", { Double } }, { "F", { String } }
         ,{ "G", { Date } }, { "H", { Time } }, { "I", { Object } }
@@ -73,8 +74,7 @@ TEST_CASE( "rel_ty_t basics", "[rel_ty_t]") {
         "{ A : Void, B : Bool, C : Int, D : Float, E : Double, F : String, "
         "G : Date, H : Time, I : Object }";
 
-    rel_ty_t rel_ty( col_tys );
-    REQUIRE( rel_ty_to_string( rel_ty ) == expected );
+    REQUIRE( col_tys_to_string( col_tys ) == expected );
 
 }
 
@@ -179,7 +179,7 @@ TEST_CASE( "relation_builder basics", "[relation_builder]") {
     std::vector<std::string> col_names { "A", "B", "C" };
     relation_builder<int, float, double> builder( &rsrc, col_names.begin(), col_names.end() );
 
-    rel_ty_t expected { { "A", { Int } }, { "B" , { Float } }, { "C", { Double } } };
+    col_tys_t expected { { "A", { Int } }, { "B" , { Float } }, { "C", { Double } } };
     REQUIRE( builder.type() == expected );
 
     int a = 1;
@@ -201,4 +201,18 @@ TEST_CASE( "relation_builder basics", "[relation_builder]") {
     builder.push_back( 200, 4.5, 2.3 );
 
     builder.dump( std::cout );
+}
+
+
+TEST_CASE( "rel_ty_t basics", "[rel_ty_t]" ) {
+
+    REQUIRE( rel_ty_t { }.m_tys.size() == 0 );
+
+    REQUIRE( rel_ty_t { { "A", { Int } } }  == rel_ty_t { { "A", { Int } } } );
+    REQUIRE( rel_ty_t { { "A", { Int } } } != rel_ty_t { { "B", { Int } } } );
+    REQUIRE( rel_ty_t { { "A", { Int } } } != rel_ty_t { { "A", { Double } } } );
+    REQUIRE( rel_ty_t { { "A", { Int } } } != rel_ty_t {  } );
+    REQUIRE( rel_ty_t { { "A", { Int } }, { "B", { Double } } }  == rel_ty_t { { "B", { Double } }, { "A", { Int } } } );
+
+    CHECK_THROWS( rel_ty_t { } == rel_ty_t { { "A", { Int } }, { "A", { Double } } } );
 }

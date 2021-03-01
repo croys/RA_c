@@ -8,7 +8,9 @@
 #include <stdexcept>
 #include <algorithm>
 #include <utility>
+#include <ostream>
 #include <sstream>
+#include <initializer_list>
 
 #include "base.h"
 
@@ -16,6 +18,8 @@ namespace rac
 {
 
 // Types of basic objects that can be stored in a relation
+
+// FIXME: uint32_t, uint64_t, size_t, pointers
 
 typedef enum {
     Void, Bool, Int, Float, Double, String, Date, Time,
@@ -40,9 +44,22 @@ constexpr auto operator<=>(const type_t& ta, const type_t& tb)
 }
 
 
-// FIXME: traits of C++ types
+std::ostream& ty_to_stream( std::ostream& os, const type_t& ty )
+{
+    switch (ty.ty_con) {
+        case Void:      return os << "Void";
+        case Bool:      return os << "Bool";
+        case Int:       return os << "Int";
+        case Float:     return os << "Float";
+        case Double:    return os << "Double";
+        case String:    return os << "String";
+        case Date:      return os << "Date";
+        case Time:      return os << "Time";
+        case Object:    return os << "Object";
+    }
+    throw std::invalid_argument( "Unrecognised type" );
+}
 
-// FIXME: uint32_t, uint64_t, size_t, pointers
 std::string ty_to_string( const type_t& ty )
 {
     switch (ty.ty_con) {
@@ -59,43 +76,92 @@ std::string ty_to_string( const type_t& ty )
     throw std::invalid_argument( "Unrecognised type" );
 }
 
-//typedef std::u8string_view cstring_t;
-typedef std::string_view cstring_t;
 
-// Relation type
-#if 0
-typedef
-struct
+// columns are typed and have names and ordering
+// used in relation_builder and table_view
+typedef std::vector< std::pair< std::string, type_t > > col_tys_t;
+
+std::ostream& col_tys_to_stream( std::ostream& os, const col_tys_t& col_tys )
 {
-public:
-    // construction
+    os << "{ ";
+    for (auto it = col_tys.cbegin(); it != col_tys.cend(); ++it) {
+        if (it != col_tys.cbegin())
+            os << ", ";
+        os  << std::get<0>(*it) << " : " << ty_to_string( std::get<1>(*it) );
+    }
+    os << " }";
 
-    //relation_ty()
+    return os;
+}
 
-    // deconstruction  - iterators
-
-//private:
-    std::vector< std::tuple< cstring_t, type_t > > m_tys;
-} rel_ty_t;
-
-#endif
-
-
-//typedef std::vector< std::tuple< cstring_t, type_t > > rel_ty_t;
-//typedef std::vector< std::pair< cstring_t, type_t > > rel_ty_t;
-typedef std::vector< std::pair< std::string, type_t > > rel_ty_t;
-
-std::string rel_ty_to_string( const rel_ty_t& rty )
+std::string col_tys_to_string( const col_tys_t& col_tys )
 {
     std::ostringstream ss;
-    ss << "{ ";
-    for (auto it = rty.cbegin(); it != rty.cend(); ++it) {
-        if (it != rty.cbegin())
-            ss << ", ";
-        ss  << std::get<0>(*it) << " : " << ty_to_string( std::get<1>(*it) );
-    }
-    ss << " }";
+    col_tys_to_stream( ss, col_tys );
     return ss.str();
+}
+
+typedef std::string_view cstring_t;
+
+
+// Relation type
+//
+// A relation type is built up of typed and named columns, but has no
+// ordering
+struct rel_ty_t
+{
+private:
+    void construct()
+    {
+        // Normal/canonical form is just sorted
+        std::sort( m_tys.begin(), m_tys.end() );
+
+        // Check for repeated column names
+        if ( m_tys.size() > 1 )
+        {
+            for ( size_t i=0; i < m_tys.size() - 1; ++i )
+            {
+                if ( m_tys[ i ].first == m_tys[ i+1 ].first ) {
+                    throw_with< std::invalid_argument >(
+                        std::ostringstream()
+                        << "Column name '" << m_tys[ i ].first << "' repeated"
+                    );
+                }
+            }
+        }
+    }
+public:
+
+    explicit rel_ty_t( const col_tys_t& col_tys )
+        : m_tys( col_tys )
+    {
+        construct();
+    }
+
+    explicit rel_ty_t( col_tys_t&& col_tys )
+        : m_tys( col_tys )
+    {
+        construct();
+    }
+
+    rel_ty_t( std::initializer_list< col_tys_t::value_type > init )
+        : m_tys( init )
+    {
+        construct();
+    }
+
+    col_tys_t m_tys;
+};
+
+
+inline bool operator==(const rel_ty_t& ta, const rel_ty_t& tb)
+{
+    return ta.m_tys == tb.m_tys;
+}
+
+inline auto operator<=>(const rel_ty_t& ta, const rel_ty_t& tb)
+{
+    return ta.m_tys <=> tb.m_tys;
 }
 
 
@@ -106,9 +172,9 @@ std::string rel_ty_to_string( const rel_ty_t& rty )
 rel_ty_t rty_union( const rel_ty_t& a, const rel_ty_t& b )
 {
     std::vector< std::pair< std::string, type_t > > res;
-    std::map< cstring_t, type_t > b_names( b.cbegin(), b.cend() );
+    std::map< cstring_t, type_t > b_names( b.m_tys.cbegin(), b.m_tys.cend() );
 
-    for( auto a_it = a.cbegin(); a_it != a.cend(); ++a_it )
+    for( auto a_it = a.m_tys.cbegin(); a_it != a.m_tys.cend(); ++a_it )
     {
         auto b_it = b_names.find( std::get<0>( *a_it ) );
         if ( b_it != b_names.cend() )
@@ -125,7 +191,7 @@ rel_ty_t rty_union( const rel_ty_t& a, const rel_ty_t& b )
             res.emplace_back( *a_it );
         }
     }
-    return res;
+    return rel_ty_t( std::move( res ) );
 }
 
 // project
@@ -151,7 +217,7 @@ rel_ty_t rty_intersect( const rel_ty_t& a, const rel_ty_t& b )
 }
 
 
-// allBut
+// all_but
 
 
 

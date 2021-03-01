@@ -744,6 +744,78 @@ void collect_ops( std::vector<IValue*>& ops )
 
 
 
+std::ostream& cols_to_stream(
+     std::ostream&                              os
+    ,const col_tys_t&                           col_tys
+    ,const std::vector<IValue*>&                ops
+    ,const std::vector<IValue::storage_ptr_t>&  cols
+)
+{
+    const size_t n_cols = cols.size();
+    const size_t n_rows = cols[ 0 ]->size();
+
+    // Work out column widths
+    std::vector<size_t> col_sizes( n_cols );
+    for ( size_t c = 0; c < n_cols; ++c )
+    {
+        col_sizes[ c ] = col_tys[ c ].first.size();
+    }
+
+    std::ostringstream ss;
+    size_t total_width = 0;
+    for ( size_t c = 0; c < n_cols; ++c )
+    {
+        size_t m = col_sizes[ c ];
+        for (auto it = cols[ c ]->cbegin(); it != cols[ c ]->cend(); ++it )
+        {
+            ss.str("");
+            ops[ c ]->to_stream( it.get(), ss );
+            m = std::max( size_t( ss.tellp() ), m );
+        }
+        col_sizes[ c ] = m;
+
+        if (c > 0) {
+            os << "  ";
+            total_width += 2;
+        }
+        ss.str("");
+        ss.width( m );
+        ss << col_tys[ c ].first;
+        ss.width( 0 );
+        os << ss.str();
+        total_width += m;
+    }
+    os << "\n";
+
+    for ( size_t i=0; i < total_width; ++i )
+    {
+        os << "-";
+    }
+    os << "\n";
+
+    // values
+
+    for ( size_t r = 0; r < n_rows; ++r )
+    {
+        for( size_t c = 0; c < n_cols; ++c )
+        {
+            if (c > 0) {
+                os << "  ";
+            }
+            ss.str("");
+            ss.width( col_sizes[ c ] );
+            ops[ c ]->to_stream( cols[ c ]->at( r ), ss );
+            ss.width(0);
+            os << ss.str();
+        }
+        os << "\n";
+    }
+
+    return os;
+}
+
+
+
 // relation builder
 //
 // Design considerations - the only reason we are using dynamically typed
@@ -775,7 +847,7 @@ public:
         }
         Iter ni = nb;
         for (auto oi = m_ops.cbegin(); ni < ne; ++ni, ++oi) {
-            m_rel_ty.push_back( std::make_pair(*ni, (*oi)->type() ) );
+            m_col_tys.push_back( std::make_pair(*ni, (*oi)->type() ) );
         }
 
         for (auto oi = m_ops.cbegin(); oi != m_ops.cend(); ++oi ) {
@@ -788,9 +860,9 @@ public:
         }
     }
 
-    constexpr const rel_ty_t& type() const noexcept
+    constexpr const col_tys_t& type() const noexcept
     {
-        return m_rel_ty;
+        return m_col_tys;
     }
 
     size_t constexpr size() const noexcept
@@ -839,83 +911,18 @@ public:
         return col_helper<Types...>::row( m_cols, 0, idx );
     }
 
-    void dump( std::ostream& os ) const
+    std::ostream& dump( std::ostream& os ) const
     {
         // dump type
-        os << "relation_builder { ";
-        for ( auto it = m_rel_ty.cbegin(); it != m_rel_ty.cend(); ++it ) {
-            if ( it != m_rel_ty.cbegin() ) {
-                os << ", ";
-            }
-            os << std::get<0>(*it) << " : " << ty_to_string( std::get<1>(*it) );
 
-        }
-        os << " }\n\n";
+        os << "relation_builder ";
+        col_tys_to_stream( os, m_col_tys );
+        os << "\n\n";
 
-        // dump values
-
-        const size_t n_cols = m_cols.size();
-        const size_t n_rows = m_cols[ 0 ]->size();
-
-        // Work out column widths
-        std::vector<size_t> col_sizes( n_cols );
-        for ( size_t c = 0; c < n_cols; ++c )
-        {
-            col_sizes[ c ] = m_rel_ty[ c ].first.size();
-        }
-
-        std::ostringstream ss;
-        size_t total_width = 0;
-        for ( size_t c = 0; c < n_cols; ++c )
-        {
-            size_t m = col_sizes[ c ];
-            for (auto it = m_cols[ c ]->cbegin(); it != m_cols[ c ]->cend(); ++it )
-            {
-                ss.str("");
-                m_ops[ c ]->to_stream( it.get(), ss );
-                m = std::max( size_t( ss.tellp() ), m );
-            }
-            col_sizes[ c ] = m;
-
-            if (c > 0) {
-                os << "  ";
-                total_width += 2;
-            }
-            ss.str("");
-            ss.width( m );
-            ss << m_rel_ty[ c ].first;
-            ss.width( 0 );
-            os << ss.str();
-            total_width += m;
-        }
-        os << "\n";
-
-        for ( size_t i=0; i < total_width; ++i )
-        {
-            os << "-";
-        }
-        os << "\n";
-
-        // values
-
-        for ( size_t r = 0; r < n_rows; ++r )
-        {
-            for( size_t c = 0; c < n_cols; ++c )
-            {
-                if (c > 0) {
-                    os << "  ";
-                }
-                ss.str("");
-                ss.width( col_sizes[ c ] );
-                m_ops[ c ]->to_stream( m_cols[ c ]->at( r ), ss );
-                ss.width(0);
-                os << ss.str();
-            }
-            os << "\n";
-        }
+        return cols_to_stream( os, m_col_tys, m_ops, m_cols );
     }
 
-    rel_ty_t                            m_rel_ty;
+    col_tys_t                           m_col_tys;
     // FIXME: combine following into tuple?
     std::vector<IValue*>                m_ops;
     std::vector<resource_ptr_t>         m_resources;
@@ -928,10 +935,6 @@ public:
     // then we can just keep untype_column_storage instances, and
     // use these to build the relation...
 };
-
-// build up column or row-wise
-
-// templated convenience functions for adding rows
 
 #if 0
 template<typename NI, typename TI>
