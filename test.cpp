@@ -219,6 +219,7 @@ TEST_CASE( "rel_ty_t basics", "[rel_ty_t]" ) {
     REQUIRE( rel_ty_t::intersect( rel_ty_empty, rel_ty_a ) == rel_ty_empty );
     REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_empty ) == rel_ty_empty );
     REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_a ) == rel_ty_a );
+    REQUIRE( rel_ty_t::intersect( rel_ty_b, rel_ty_b ) == rel_ty_b );
     REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_b ) == rel_ty_empty );
     REQUIRE( rel_ty_t::intersect( rel_ty_b, rel_ty_a ) == rel_ty_empty );
     CHECK_THROWS( rel_ty_t::intersect( rel_ty_a, rel_ty_a_ ) );
