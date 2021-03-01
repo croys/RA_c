@@ -850,13 +850,14 @@ public:
             m_col_tys.push_back( std::make_pair(*ni, (*oi)->type() ) );
         }
 
-        for (auto oi = m_ops.cbegin(); oi != m_ops.cend(); ++oi ) {
+        for (const auto& op : m_ops ) {
             // we could use memory directly allocated from monotonic_buffer_resource
             // instead of a std::vector
             //resource_ptr_t r = std::make_shared<std::pmr::monotonic_buffer_resource>( rsrc );
-            resource_ptr_t r = std::make_shared<std::pmr::unsynchronized_pool_resource>( rsrc );
-            m_resources.push_back( r );
-            m_cols.emplace_back( (*oi)->make_storage( r.get() ) );
+            resource_ptr_t r  =
+                std::make_shared<std::pmr::unsynchronized_pool_resource>( rsrc );
+            m_cols.emplace_back( op->make_storage( r.get() ) );
+            m_resources.emplace_back( std::move( r ) );
         }
     }
 
@@ -936,34 +937,29 @@ public:
     // use these to build the relation...
 };
 
-#if 0
-template<typename NI, typename TI>
-relation_t create(
-         NI nstart, NI nend // range of column names
-        ,TI tstart, TI tend // range of column types
-        ,
 
-)
+// relations - monotyped
+struct relation
 {
-    throw not_implemented();
-}
-#endif
 
-
-
-// relations themselves
-// want iteration over rows and std::get<> to allow
-// interop with std contaiers
-
-// tableviews
-// - distinguish table and relation types?
-// - table colums have ordering
-//  - useful for display, typed construction and deconstruction.
+};
 // - relation columns are unordered
+// - do we want to guarantee ordering of rows on first key?
 // - do keys belong in relation type, or just to relations?
 
 
 // relation operations
+
+// table views
+
+// table_view - monotyped view onto a relation
+// In table_view columns and rows have ordering
+
+// table_view_t - statically typed view onto a relation
+// In table_view_t columns and rows have ordering
+
+// want iteration over rows and std::get<> to allow
+// interop with std contaiers
 
 
 }

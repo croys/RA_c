@@ -183,13 +183,51 @@ TEST_CASE( "relation_builder basics", "[relation_builder]") {
 
 TEST_CASE( "rel_ty_t basics", "[rel_ty_t]" ) {
 
-    REQUIRE( rel_ty_t { }.m_tys.size() == 0 );
+    rel_ty_t rel_ty_empty   {};
+    rel_ty_t rel_ty_a       { { { "A" }, { Int } } };
+    rel_ty_t rel_ty_b       { { { "B" }, { Int } } };
+    rel_ty_t rel_ty_a_      { { { "A" }, { Double } } };
+    rel_ty_t rel_ty_ab      { { { "A" }, { Int } }, { { "B" }, { Int } } };
+    rel_ty_t rel_ty_ba      { { { "B" }, { Int } }, { { "A" }, { Int } } };
 
-    REQUIRE( rel_ty_t { { "A", { Int } } }  == rel_ty_t { { "A", { Int } } } );
-    REQUIRE( rel_ty_t { { "A", { Int } } } != rel_ty_t { { "B", { Int } } } );
-    REQUIRE( rel_ty_t { { "A", { Int } } } != rel_ty_t { { "A", { Double } } } );
-    REQUIRE( rel_ty_t { { "A", { Int } } } != rel_ty_t {  } );
-    REQUIRE( rel_ty_t { { "A", { Int } }, { "B", { Double } } }  == rel_ty_t { { "B", { Double } }, { "A", { Int } } } );
+    REQUIRE( rel_ty_empty.m_tys.size() == 0 );
+    REQUIRE( rel_ty_empty == rel_ty_empty );
+    REQUIRE( rel_ty_empty == rel_ty_t { } );
 
-    CHECK_THROWS( rel_ty_t { } == rel_ty_t { { "A", { Int } }, { "A", { Double } } } );
+    REQUIRE( rel_ty_a == rel_ty_a );
+    REQUIRE( rel_ty_a == rel_ty_t { { "A", { Int } } } );
+    REQUIRE( rel_ty_a != rel_ty_b );
+    REQUIRE( rel_ty_a != rel_ty_a_ );
+    REQUIRE( rel_ty_a  != rel_ty_empty );
+    REQUIRE( rel_ty_ab  == rel_ty_ba );
+    CHECK_THROWS( rel_ty_t { { "A", { Int } }, { "A", { Double } } } );
+
+    REQUIRE( rel_ty_t::union_( rel_ty_empty, rel_ty_empty ) == rel_ty_empty );
+    REQUIRE( rel_ty_t::union_( rel_ty_a, rel_ty_empty ) == rel_ty_a );
+    REQUIRE( rel_ty_t::union_( rel_ty_empty, rel_ty_a ) == rel_ty_a );
+    CHECK_THROWS( rel_ty_t::union_( rel_ty_a, rel_ty_a_ ) );
+    REQUIRE( rel_ty_t::union_( rel_ty_a, rel_ty_a ) == rel_ty_a );
+    REQUIRE( rel_ty_t::union_( rel_ty_b, rel_ty_b ) == rel_ty_b );
+    REQUIRE( rel_ty_t::union_( rel_ty_a, rel_ty_b ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::union_( rel_ty_b, rel_ty_a ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::union_( rel_ty_ab, rel_ty_a ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::union_( rel_ty_a, rel_ty_ab ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::union_( rel_ty_ab, rel_ty_b ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::union_( rel_ty_b, rel_ty_ab ) == rel_ty_ab );
+
+    REQUIRE( rel_ty_t::intersect( rel_ty_empty, rel_ty_empty ) == rel_ty_empty );
+    REQUIRE( rel_ty_t::intersect( rel_ty_empty, rel_ty_a ) == rel_ty_empty );
+    REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_empty ) == rel_ty_empty );
+    REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_a ) == rel_ty_a );
+    REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_b ) == rel_ty_empty );
+    REQUIRE( rel_ty_t::intersect( rel_ty_b, rel_ty_a ) == rel_ty_empty );
+    CHECK_THROWS( rel_ty_t::intersect( rel_ty_a, rel_ty_a_ ) );
+    REQUIRE( rel_ty_t::intersect( rel_ty_ab, rel_ty_ab ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::intersect( rel_ty_ba, rel_ty_ba ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::intersect( rel_ty_ab, rel_ty_ba ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::intersect( rel_ty_ba, rel_ty_ab ) == rel_ty_ab );
+    REQUIRE( rel_ty_t::intersect( rel_ty_a, rel_ty_ab ) == rel_ty_a );
+    REQUIRE( rel_ty_t::intersect( rel_ty_ab, rel_ty_a ) == rel_ty_a );
+    REQUIRE( rel_ty_t::intersect( rel_ty_b, rel_ty_ab ) == rel_ty_b );
+    REQUIRE( rel_ty_t::intersect( rel_ty_ab, rel_ty_b ) == rel_ty_b );
 }

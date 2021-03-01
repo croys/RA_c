@@ -150,6 +150,109 @@ public:
         construct();
     }
 
+
+    // union
+    static rel_ty_t union_( const rel_ty_t& a, const rel_ty_t& b )
+    {
+        col_tys_t col_tys;
+
+        auto a_it = a.m_tys.cbegin();
+        auto b_it = b.m_tys.cbegin();
+
+        while ( ( a_it != a.m_tys.cend() ) || ( b_it != b.m_tys.cend() ) )
+        {
+            if ( a_it == a.m_tys.cend() )
+            {
+                col_tys.push_back( *b_it );
+                ++b_it;
+            } else if ( b_it == b.m_tys.cend() )
+            {
+                col_tys.push_back( *a_it );
+                ++a_it;
+            } else
+            {
+                const auto& [ a_name, a_ty ] = *a_it;
+                const auto& [ b_name, b_ty ] = *b_it;
+
+                if ( a_name == b_name )
+                {
+                    if ( a_ty == b_ty )
+                    {
+                        col_tys.push_back( *a_it );
+                    } else {
+                        throw_with< std::invalid_argument >(
+                            std::ostringstream()
+                            << "Types for column '" << a_name 
+                            << "' do not match: "
+                            << ty_to_string( a_ty ) // FIXME: streaming for types
+                            << " and " << ty_to_string( b_ty )
+                        );
+                    }
+                    ++a_it;
+                    ++b_it;
+                } else {
+                    if ( a_name < b_name ) {
+                        col_tys.push_back( *a_it );
+                        ++a_it;
+                    } else {
+                        col_tys.push_back( *b_it );
+                        ++b_it;
+                    }
+                }
+            }
+        }
+
+        // Note: col_tys is sorted by construction
+        return rel_ty_t( std::move( col_tys ) );
+    }
+
+    // project
+    template <typename Iterator>
+    static rel_ty_t project( const rel_ty_t& a, Iterator begin, Iterator end )
+    {
+        throw not_implemented();
+    }
+
+    // minus
+
+    static rel_ty_t minus( const rel_ty_t& a, const rel_ty_t& b )
+    {
+        throw not_implemented();
+    }
+
+
+    // intersect
+    static rel_ty_t intersect( const rel_ty_t& a, const rel_ty_t& b )
+    {
+        col_tys_t res;
+        std::map< cstring_t, type_t > b_names( b.m_tys.cbegin(), b.m_tys.cend() );
+
+        for( auto a_it = a.m_tys.cbegin(); a_it != a.m_tys.cend(); ++a_it )
+        {
+            auto b_it = b_names.find( std::get<0>( *a_it ) );
+            if ( b_it != b_names.cend() )
+            {
+                if ( std::get<1>( *a_it ) != std::get<1>( *b_it ) ) {
+                    throw_with< std::invalid_argument >(
+                        std::ostringstream()
+                        << "Types for column '"
+                        << std::get<0>(*a_it).data()
+                        << "' do not match: "
+                        << ty_to_string( std::get<1>(*a_it) )
+                        << " and "
+                        << ty_to_string( std::get<1>(*b_it) )
+                    );
+                }
+                res.push_back( *a_it );
+            }
+        }
+        return rel_ty_t( std::move( res ) );
+    }
+
+
+    // all_but
+
+
     col_tys_t m_tys;
 };
 
@@ -163,63 +266,6 @@ inline auto operator<=>(const rel_ty_t& ta, const rel_ty_t& tb)
 {
     return ta.m_tys <=> tb.m_tys;
 }
-
-
-// Operations on relation types
-
-
-// union
-rel_ty_t rty_union( const rel_ty_t& a, const rel_ty_t& b )
-{
-    std::vector< std::pair< std::string, type_t > > res;
-    std::map< cstring_t, type_t > b_names( b.m_tys.cbegin(), b.m_tys.cend() );
-
-    for( auto a_it = a.m_tys.cbegin(); a_it != a.m_tys.cend(); ++a_it )
-    {
-        auto b_it = b_names.find( std::get<0>( *a_it ) );
-        if ( b_it != b_names.cend() )
-        {
-            if ( std::get<1>( *a_it ) != std::get<1>( *b_it ) ) {
-                throw_with< std::invalid_argument >(
-                    std::ostringstream()
-                    << "Types for '" << std::get<0>(*a_it).data() << " do not match: "
-                    << ty_to_string( std::get<1>(*a_it) )
-                    << " and "
-                    << ty_to_string( std::get<1>(*b_it) )
-                );
-            }
-            res.emplace_back( *a_it );
-        }
-    }
-    return rel_ty_t( std::move( res ) );
-}
-
-// project
-template <typename Iterator>
-rel_ty_t rty_project( const rel_ty_t& a, Iterator begin, Iterator end )
-{
-    throw not_implemented();
-}
-
-// minus
-
-rel_ty_t rty_minus( const rel_ty_t& a, const rel_ty_t& b )
-{
-    throw not_implemented();
-}
-
-
-// intersect
-
-rel_ty_t rty_intersect( const rel_ty_t& a, const rel_ty_t& b )
-{
-    throw not_implemented();
-}
-
-
-// all_but
-
-
 
 
 }
