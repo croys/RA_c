@@ -13,37 +13,14 @@
 using namespace rac;
 
 TEST_CASE( "base basics" , "[base]" ) {
-    {
-        bool thrown = false;
-        std::string msg;
-        try {
-            throw_with< std::runtime_error >(
-                std::ostringstream() << "Test"
-            );
-        } catch (const std::exception& e) {
-            thrown = true;
-            msg = e.what();
-        }
-        REQUIRE( thrown == true );
-        REQUIRE( msg == "Test" );
-    }
     CHECK_THROWS_WITH( throw_with< std::runtime_error >( std::ostringstream() << "Test" ), "Test" );
 
-    {
-        bool thrown = false;
-        std::string msg;
-        try {
-            throw_lambda< std::invalid_argument >(
-                [=]( std::ostringstream& ss ) { ss
-                    << "Lambda throw";
-                } );
-        } catch (const std::exception& e) {
-            thrown = true;
-            msg = e.what();
-        }
-        REQUIRE( thrown == true );
-        REQUIRE( msg == "Lambda throw" );
-    }
+    CHECK_THROWS_WITH( throw_lambda< std::invalid_argument >(
+        [=]( std::ostringstream& ss ) { ss
+            << "Lambda throw";
+        } ),
+        "Lambda throw"
+    );
 }
 
 TEST_CASE( "type_t basics", "[type_t]" ) {
